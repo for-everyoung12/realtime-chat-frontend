@@ -1,12 +1,17 @@
+// socket.ts
 import { io, Socket } from "socket.io-client";
 
-const URL = import.meta.env.VITE_SOCKET_URL; 
+const BASE = import.meta.env.VITE_SOCKET_URL ?? "http://localhost:8081"; 
 
-export const socket: Socket = io(URL, {
-  transports: ["websocket"],
+export const socket: Socket = io(`${BASE}/chat`, {
+  transports: ["polling", "websocket"],
   withCredentials: true,
-  autoConnect: false, // chủ động connect khi user đăng nhập
+  autoConnect: false,
 });
 
-export const connectSocket = () => { if (!socket.connected) socket.connect(); };
-export const disconnectSocket = () => { if (socket.connected) socket.disconnect(); };
+export const connectSocket = () => {
+  if (!socket.connected) socket.connect();
+};
+export const disconnectSocket = () => {
+  if (socket.connected) socket.disconnect();
+};

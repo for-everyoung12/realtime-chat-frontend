@@ -12,5 +12,9 @@ export const API = {
     CHAT_MESSAGE: "/chat/messages",
     SEND_MESSAGE: "/chat/messages",
     READ_MESSAGE: (id: string) => `/chat/messages/${id}/read`,
+  },
+
+  friend: {
+    LIST: "/friend/list"
   }
 };

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { AuthService } from "../../modules/auth/services/auth.service";
+import { connectSocket, disconnectSocket } from "@shared/realtime/socket";
 
 type User = { id: string; email: string; username: string } | null;
 
@@ -17,6 +18,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
+
+  // connect/disconnect socket theo trạng thái đăng nhập
+  useEffect(() => {
+    if (user) connectSocket();
+    else disconnectSocket();
+  }, [user]);
 
   
 
