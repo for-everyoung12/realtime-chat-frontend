@@ -9,6 +9,7 @@ import type { Message as ApiMessage } from "@/modules/chat/types/chat";
 import { useAuth } from "@/app/context/AuthContext";
 import { registerChatHandlers, unregisterChatHandlers } from "@/modules/shared/realtime/chat.handlers";
 import { useRoomSocket } from "@/modules/chat/hooks/useRoomSocket";
+import { sendMessageWs } from "@/modules/shared/realtime/chat.emitters";
 
 interface ChatWindowProps {
   chatId: string | null;
@@ -112,24 +113,16 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     setMessage("");
 
     try {
-      const created = await ChatService.createMessage({
+      const ack = await sendMessageWs({
         conversationId: chatId,
         type: "text",
         content: optimistic.content,
         clientMsgId,
       });
-      // Reconcile optimistic with server message
-      setMessages(prev =>
-        prev.map(m => (m.id === clientMsgId ? {
-          id: created.id,
-          conversationId: created.conversationId,
-          senderId: created.senderId,
-          content: created.content,
-          createdAt: created.createdAt,
-          status: created.readBy && created.readBy.length > 0 ? "read" : "delivered",
-          isOwn: true,
-        } : m))
-      );
+      if (ack?.ok && ack.id) {
+        // Reconcile by ack id; final content will also arrive via onNewMessage
+        setMessages(prev => prev.map(m => (m.id === clientMsgId ? { ...m, id: ack.id, status: "delivered" } : m)));
+      }
     } catch (_) {
       // Remove optimistic on failure
       setMessages(prev => prev.filter(m => m.id !== clientMsgId));
