@@ -16,9 +16,9 @@ export const ChatService = {
                 return { rows: rows.map(mapConversation), nextCursor };
             }),
 
-    createConversation: (memberId: string) =>
+    createConversation: (payload: { type: "single" | "group"; memberIds: string[]; name?: string }) =>
         http
-            .post<any>(API.chat.CREATE_CONVERSATION, { memberId })
+            .post<any>(API.chat.CREATE_CONVERSATION, payload)
             .then((res) => mapConversation(res.data) as Conversation),
 
     getMessages: (

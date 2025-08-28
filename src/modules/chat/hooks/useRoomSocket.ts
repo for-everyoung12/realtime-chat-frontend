@@ -7,19 +7,23 @@ export const useRoomSocket = (conversationId: string) => {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!conversationId) return;
+    console.log("join room", conversationId);
+
       await joinConversation(conversationId);
     })();
 
     return () => {
       mounted = false;
       if (typingTimer.current) clearTimeout(typingTimer.current);
-      leaveConversation(conversationId);
+      if (conversationId) leaveConversation(conversationId);
     };
   }, [conversationId]);
 
   // tiện ích: debounce typing
   const emitTyping = () => {
     if (typingTimer.current) clearTimeout(typingTimer.current);
+    if (!conversationId) return;
     startTypingWs(conversationId);
     typingTimer.current = setTimeout(() => stopTypingWs(conversationId), 1500);
   };
