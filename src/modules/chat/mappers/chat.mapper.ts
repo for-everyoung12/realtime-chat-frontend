@@ -9,8 +9,8 @@ export const mapConversation = (c: any): Conversation => ({
   avatarUrl: c.avatarUrl,
   members: (c.members ?? []).map((m: any) => ({
     userId: m?.userId?._id ?? m?.userId,
-    role: m?.role,
-    joinedAt: toISO(m?.joinedAt)!,
+    role: m?.role, // may be undefined -> OK if type is optional
+    joinedAt: toISO(m?.joinedAt ?? c?.createdAt ?? c?.updatedAt), // fallback an toàn
   })),
   lastMessage:
     c.lastMessage && c.lastMessage.messageId
@@ -18,11 +18,11 @@ export const mapConversation = (c: any): Conversation => ({
           messageId: c.lastMessage.messageId?._id ?? c.lastMessage.messageId,
           senderId: c.lastMessage.senderId?._id ?? c.lastMessage.senderId,
           content: c.lastMessage.content,
-          createdAt: toISO(c.lastMessage.createdAt)!,
+          createdAt: toISO(c.lastMessage.createdAt),
         }
       : undefined,
-  createdAt: toISO(c.createdAt)!,
-  updatedAt: toISO(c.updatedAt)!,
+  createdAt: toISO(c.createdAt) ?? new Date(0).toISOString(),
+  updatedAt: toISO(c.updatedAt) ?? new Date(0).toISOString(),
 });
 
 export const mapMessage = (m: any): Message => ({

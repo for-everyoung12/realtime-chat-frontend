@@ -6,11 +6,20 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  name: string;
+}
+
 export const AuthService = {
   login: (payload: LoginPayload) =>
-    http.post(API.auth.login, payload).then((res) => res.data),
+    http.post(API.auth.LOGIN, payload).then((res) => res.data),
 
-    me: () => http.get(API.auth.me).then((res) => res.data),
+  me: () => http.get(API.auth.ME).then((res) => res.data),
 
-  logout: () => http.post(API.auth.logout, {}).then((res) => res.data),
+  register: (payload: RegisterPayload) =>
+    http.post(API.auth.REGISTER, payload).then((res) => res.data),
+
+  logout: () => http.post(API.auth.LOGOUT, {}).then((res) => res.data),
 };

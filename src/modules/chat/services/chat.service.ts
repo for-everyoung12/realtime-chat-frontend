@@ -3,11 +3,18 @@ import { http } from "@shared/api/http";
 import type { Conversation, Message, Cursor } from "../types/chat";
 import { mapConversation, mapMessage } from "../mappers/chat.mapper";
 
+type PageResult<T> = { rows: T[]; nextCursor: string | null };
+
 export const ChatService = {
-    getConversations: (params?: { limit?: number; cursor?: Cursor }) =>
+    getConversations: (params?: { limit?: number; cursor?: string }): Promise<PageResult<Conversation>> =>
         http
-            .get<any[]>(API.chat.CHAT_CONVERSATION, { params })
-            .then((res) => res.data.map(mapConversation) as Conversation[]),
+            .get<any>(API.chat.CHAT_CONVERSATION, { params })
+            .then((res) => {
+                const data = res.data;
+                const rows = Array.isArray(data) ? data : data?.rows ?? [];
+                const nextCursor = Array.isArray(data) ? null : data?.nextCursor ?? null;
+                return { rows: rows.map(mapConversation), nextCursor };
+            }),
 
     createConversation: (memberId: string) =>
         http
@@ -17,12 +24,15 @@ export const ChatService = {
     getMessages: (
         conversationId: string,
         params?: { limit?: number; cursor?: Cursor }
-    ) =>
+    ): Promise<PageResult<Message>> =>
         http
-            .get<any[]>(API.chat.CHAT_MESSAGE, {
-                params: { conversationId, ...params },
-            })
-            .then((res) => res.data.map(mapMessage) as Message[]),
+            .get<any>(API.chat.CHAT_MESSAGE, { params: { conversationId, ...params } })
+            .then((res) => {
+                const data = res.data;
+                const rows = Array.isArray(data) ? data : data?.rows ?? [];
+                const nextCursor = Array.isArray(data) ? null : data?.nextCursor ?? null;
+                return { rows: rows.map(mapMessage), nextCursor };
+            }),
 
     createMessage: (payload: {
         conversationId: string;
@@ -39,6 +49,5 @@ export const ChatService = {
     readMessage: (messageId: string) =>
         http
             .patch<{ success: boolean }>(API.chat.READ_MESSAGE(messageId))
-            .then(res => res.data),
-
+            .then((res) => res.data),
 };

@@ -4,8 +4,8 @@ export type MessageType = "text" | "image" | "file" | "system";
 
 export interface ConversationMember {
   userId: string;         
-  role: MemberRole;      
-  joinedAt: string;        // ISO string
+  role?: MemberRole;      
+  joinedAt?: string;        
 }
 
 export interface LastMessage {
