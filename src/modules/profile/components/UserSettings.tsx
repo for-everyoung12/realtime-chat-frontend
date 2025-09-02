@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Camera, Edit, Save, X, Bell, Lock, Users } from "lucide-react";
 import { Button } from "@/modules/shared/components/button";
 import { Input } from "@/modules/shared/components/input";
@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/mod
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/shared/components/avatar";
 import { Switch } from "@/modules/shared/components/switch";
 import { Separator } from "@/modules/shared/components/separator";
+import { ProfileService } from "../services/profile.service";
+
 
 interface UserSettingsProps {
   onClose: () => void;
@@ -15,11 +17,28 @@ interface UserSettingsProps {
 export function UserSettings({ onClose }: UserSettingsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    status: "Hey there! I'm using ChatConnect",
+    name: "",
+    email: "",
+    status: "",
     avatar: ""
   });
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+        try {
+          const data = await ProfileService.me();
+          setProfile({
+            name: data?.name ?? "",
+            email: data?.email ?? "",
+            status: data?.status ?? "",
+            avatar: data?.avatar ?? ""
+          });
+        } catch (err) {
+          console.error("Failed to load profile", err);
+        }
+    };
+    fetchProfile();
+  }, [])
 
   const [settings, setSettings] = useState({
     notifications: true,
