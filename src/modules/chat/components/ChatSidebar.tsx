@@ -5,26 +5,11 @@ import { Input } from "@/modules/shared/components/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/shared/components/avatar";
 import { Badge } from "@/modules/shared/components/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/modules/shared/components/tabs";
+import { PresenceDot } from "@/modules/shared/components/presence-dot";
+import type { UiFriend, UiChatRoom } from "@/modules/chat/types/ui";
 
-interface Friend {
-  id: string; // friendId (userId của bạn bè)
-  name: string;
-  avatar?: string;
-  status: "online" | "away" | "busy" | "offline";
-  lastMessage?: string;
-  lastSeen?: string;
-  unreadCount?: number;
-}
-
-interface ChatRoom {
-  id: string; // conversationId
-  type: "direct" | "group";
-  name: string;
-  participants: Friend[];
-  lastMessage?: string;
-  lastActivity?: string;
-  unreadCount?: number;
-}
+type Friend = UiFriend;
+type ChatRoom = UiChatRoom;
 
 interface ChatSidebarProps {
   friends: Friend[];
@@ -140,18 +125,7 @@ export function ChatSidebar({
                           {friend.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      {/* Presence dot */}
-                      <div
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${
-                          friend.status === "online"
-                            ? "bg-green-500"
-                            : friend.status === "away"
-                            ? "bg-yellow-500"
-                            : friend.status === "busy"
-                            ? "bg-red-500"
-                            : "bg-gray-400"
-                        }`}
-                      />
+                      <PresenceDot status={friend.status} className="absolute -bottom-0.5 -right-0.5 w-3 h-3" withBorder />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
