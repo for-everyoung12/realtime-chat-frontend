@@ -4,6 +4,7 @@ import { Button } from "@/modules/shared/components/button";
 import { Input } from "@/modules/shared/components/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/modules/shared/components/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/modules/shared/components/avatar";
+import { getInitialLetter } from "@/modules/shared/lib/utils";
 import { Badge } from "@/modules/shared/components/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/modules/shared/components/tabs";
 
@@ -149,7 +150,7 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
                     <Avatar className="w-12 h-12">
                       <AvatarImage src={request.avatar} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {request.name.charAt(0)}
+                        {getInitialLetter(request.name)}
                       </AvatarFallback>
                     </Avatar>
                     
@@ -202,7 +203,7 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
                     <Avatar className="w-12 h-12">
                       <AvatarImage src={request.avatar} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {request.name.charAt(0)}
+                        {getInitialLetter(request.name)}
                       </AvatarFallback>
                     </Avatar>
                     

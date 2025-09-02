@@ -1,5 +1,5 @@
 // ChatLayout.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle, Users, Settings, Phone, Video, Search } from "lucide-react";
 import { Button } from "@shared/components/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@shared/components/avatar";
@@ -10,39 +10,25 @@ import { FriendRequests } from "@/modules/friends/components/FriendRequests";
 import { ChatService } from "@/modules/chat/services/chat.service";
 import type { Conversation } from "@/modules/chat/types/chat";
 import { FriendService, type FriendListItem } from "@/modules/friends/services/friend.service";
+import type { UiFriend, UiChatRoom } from "@/modules/chat/types/ui";
 import { useAuth } from "@/app/context/AuthContext";
+import { usePresence } from "@/modules/chat/hooks/usePresence";
+import { presenceSubscribe, presenceUnsubscribe, presenceWho } from "@/modules/shared/realtime/presence.emitters";
 
-interface Friend {
-  id: string;  // friendId (userId của bạn bè)
-  name: string;
-  avatar?: string;
-  status: "online" | "away" | "busy" | "offline";
-  lastMessage?: string;
-  lastSeen?: string;
-  unreadCount?: number;
-}
-
-interface ChatRoom {
-  id: string;  // conversationId
-  type: "direct" | "group";
-  name: string;
-  participants: Friend[];
-  lastMessage?: string;
-  lastActivity?: string;
-  unreadCount?: number;
-}
+type Friend = UiFriend;
+type ChatRoom = UiChatRoom;
 
 const isObjectId = (s?: string | null) => !!s && /^[a-f0-9]{24}$/.test(s);
 
 export function ChatLayout() {
-  const { user } = useAuth(); // cần user.id để gửi memberIds
+  const { user } = useAuth();
   const [activeChat, setActiveChat] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"friends" | "groups">("friends");
 
   const [showSettings, setShowSettings] = useState(false);
   const [showFriendRequests, setShowFriendRequests] = useState(false);
 
-  // conversations (để build nhóm, và sync local sau khi tạo mới)
+  // conversations
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [convCursor, setConvCursor] = useState<string | null>(null);
   const [convLoading, setConvLoading] = useState(false);
@@ -51,6 +37,18 @@ export function ChatLayout() {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendCursor, setFriendCursor] = useState<string | null>(null);
   const [friendLoading, setFriendLoading] = useState(false);
+
+  const [activePeer, setActivePeer] = useState<Friend | null>(null);
+
+  // Attach presence listeners to update friend statuses
+  usePresence(
+    (snapshot: Record<string, Friend["status"]>) => {
+      setFriends(prev => prev.map(f => ({ ...f, status: snapshot[f.id] || f.status })));
+    },
+    (update: { userId: string; status: Friend["status"] }) => {
+      setFriends(prev => prev.map(f => (f.id === update.userId ? { ...f, status: update.status } : f)));
+    }
+  );
 
   // Load conversations
   useEffect(() => {
@@ -81,7 +79,7 @@ export function ChatLayout() {
         const page = await FriendService.getAcceptedFriends({ limit: 50 });
         if (cancelled) return;
         const mapped: Friend[] = (page.items ?? []).map((f: FriendListItem) => ({
-          id: f.friendId, // dùng friendId (userId của bạn bè)
+          id: f.friendId,
           name: f.name,
           status: (f.presence as Friend["status"]) || "offline",
         }));
@@ -97,7 +95,39 @@ export function ChatLayout() {
     return () => { cancelled = true; };
   }, []);
 
-  // Map groups từ conversations
+  // Subscribe/unsubscribe presence when friend IDs change (not on status changes)
+  const prevSubscribedIds = useRef<string[]>([]);
+  useEffect(() => {
+    const ids = friends.map(f => f.id);
+    const prev = prevSubscribedIds.current;
+
+    // diff
+    const added = ids.filter(id => !prev.includes(id));
+    const removed = prev.filter(id => !ids.includes(id));
+
+    if (removed.length) presenceUnsubscribe(removed);
+    if (added.length) {
+      presenceSubscribe(added);
+      presenceWho(added).then(ack => {
+        if (ack?.statuses) {
+          setFriends(prevFriends => prevFriends.map(f => ({
+            ...f,
+            status: (ack.statuses?.[f.id] as Friend["status"]) || f.status,
+          })));
+        }
+      });
+    }
+
+    prevSubscribedIds.current = ids;
+
+    return () => {
+      // on unmount, unsubscribe all currently subscribed ids
+      if (prevSubscribedIds.current.length) {
+        presenceUnsubscribe(prevSubscribedIds.current);
+      }
+    };
+  }, [friends.map(f => f.id).join(",")]);
+
   const groups: ChatRoom[] = useMemo(() => {
     return conversations
       .filter(c => c.type === "group")
@@ -111,35 +141,34 @@ export function ChatLayout() {
       }));
   }, [conversations]);
 
-  // Handler: chọn 1 friend → tạo/mở single conversation
   const handleFriendSelect = async (friendId: string) => {
     if (!user?.id || !isObjectId(user.id) || !isObjectId(friendId)) return;
     try {
-      // Backend yêu cầu: { type: "single", memberIds: [me, friend] }
       const conv = await ChatService.createConversation({
         type: "single",
         memberIds: [user.id, friendId],
       });
-      setActiveChat(conv.id);           // conversationId
+      setActiveChat(conv.id);
       setActiveTab("friends");
-      // sync local list nếu chưa có
       setConversations(prev => (prev.some(c => c.id === conv.id) ? prev : [conv, ...prev]));
+
+      //save user chatting with
+      const f = friends.find(x => x.id === friendId) || null;
+      setActivePeer(f);
     } catch {
-      // no-op
     }
   };
 
-  // Handler: chọn 1 group (conversation)
   const handleGroupSelect = (conversationId: string) => {
     if (!isObjectId(conversationId)) return;
     setActiveChat(conversationId);
     setActiveTab("groups");
+    setActivePeer(null);
   };
 
-  // Dùng để hiển thị header (đơn giản)
-  const activeFriend = friends.find(f => f.id === activeChat); // chỉ đúng nếu activeChat đang là friendId trước khi create
-  const activeGroup  = groups.find(g => g.id === activeChat);
-  const isValidConversation = isObjectId(activeChat); // ChatWindow render khi có conversationId hợp lệ
+  const activeFriend = friends.find(f => f.id === activeChat);
+  const activeGroup = groups.find(g => g.id === activeChat);
+  const isValidConversation = isObjectId(activeChat);
 
   return (
     <div className="h-screen bg-background flex overflow-hidden">
@@ -156,7 +185,6 @@ export function ChatLayout() {
         onFriendRequestsOpen={() => setShowFriendRequests(true)}
         loading={convLoading || friendLoading}
         onLoadMore={async () => {
-          // ví dụ: ưu tiên load thêm conversations; có thể tách nút nếu muốn
           if (convCursor) {
             const page = await ChatService.getConversations({ limit: 50, cursor: convCursor });
             setConversations(prev => [...prev, ...page.rows]);
@@ -184,20 +212,19 @@ export function ChatLayout() {
                 <Avatar className="w-10 h-10">
                   <AvatarImage src={activeFriend?.avatar} />
                   <AvatarFallback className="bg-primary text-primary-foreground font-bold">
-                    {(activeFriend?.name || activeGroup?.name || "C").charAt(0)}
+                    {(activePeer?.name || activeGroup?.name || "C").charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <h3 className="font-semibold text-foreground">
-                    {activeGroup?.name || activeFriend?.name || "Conversation"}
+                    {activePeer?.name || activeGroup?.name || "Conversation"}
                   </h3>
                   {activeFriend && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <div className={`w-2 h-2 rounded-full ${
-                        activeFriend.status === 'online' ? 'bg-green-500' :
-                        activeFriend.status === 'away'   ? 'bg-yellow-500' :
-                        activeFriend.status === 'busy'   ? 'bg-red-500'    : 'bg-gray-400'
-                      }`} />
+                      <div className={`w-2 h-2 rounded-full ${activeFriend.status === 'online' ? 'bg-green-500' :
+                        activeFriend.status === 'away' ? 'bg-yellow-500' :
+                          activeFriend.status === 'busy' ? 'bg-red-500' : 'bg-gray-400'
+                        }`} />
                       {activeFriend.status === 'online' ? 'Online' : activeFriend.lastSeen}
                     </p>
                   )}
@@ -218,7 +245,7 @@ export function ChatLayout() {
               </div>
             </div>
 
-            <ChatWindow chatId={activeChat} />
+            <ChatWindow chatId={activeChat} peer={activePeer || undefined} />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
