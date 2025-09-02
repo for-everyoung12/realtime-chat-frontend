@@ -13,18 +13,22 @@ import { sendMessageWs } from "@/modules/shared/realtime/chat.emitters";
 
 interface ChatWindowProps {
   chatId: string | null;
+  peer?: { id: string; name: string; avatar?: string };
 }
+
+import { getInitialLetter } from "@/modules/shared/lib/utils";
+
 type UiMessage = {
   id: string;
   conversationId: string;
   senderId: string;
   content: string;
-  createdAt: string; 
-  status: "sent" | "delivered" | "read"; 
+  createdAt: string;
+  status: "sent" | "delivered" | "read";
   isOwn: boolean;
 };
 
-export function ChatWindow({ chatId }: ChatWindowProps) {
+export function ChatWindow({ chatId, peer }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [message, setMessage] = useState("");
@@ -168,9 +172,9 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-4">
           {messages.map((msg, index) => {
-            const showDate = index === 0 || 
+            const showDate = index === 0 ||
               formatDate(messages[index - 1].createdAt) !== formatDate(msg.createdAt);
-            
+
             const showAvatar = !msg.isOwn && (
               index === messages.length - 1 ||
               messages[index + 1].senderId !== msg.senderId ||
@@ -186,7 +190,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                     </span>
                   </div>
                 )}
-                
+
                 <div className={`flex gap-3 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
                   {!msg.isOwn && (
                     <div className="w-8">
@@ -194,25 +198,23 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                         <Avatar className="w-8 h-8">
                           <AvatarImage src="" />
                           <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                            {/* initial */}
-                            {msg.senderId.charAt(0).toUpperCase()}
+                            {getInitialLetter(peer?.name)} 
                           </AvatarFallback>
                         </Avatar>
                       )}
                     </div>
                   )}
-                  
+
                   <div className={`max-w-[70%] ${msg.isOwn ? 'order-1' : 'order-2'}`}>
                     <div
-                      className={`px-4 py-2 rounded-2xl ${
-                        msg.isOwn
+                      className={`px-4 py-2 rounded-2xl ${msg.isOwn
                           ? 'bg-primary text-primary-foreground ml-auto'
                           : 'bg-muted text-foreground'
-                      }`}
+                        }`}
                     >
                       <p className="text-sm leading-relaxed">{msg.content}</p>
                     </div>
-                    
+
                     <div className={`flex items-center gap-2 mt-1 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
                       <span className="text-xs text-muted-foreground">
                         {formatTime(msg.createdAt)}
@@ -233,7 +235,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
             <Paperclip className="w-5 h-5" />
           </Button>
-          
+
           <div className="flex-1 relative">
             <Input
               placeholder="Type a message..."
@@ -242,16 +244,16 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               className="pr-12"
             />
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon"
               className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary hover:bg-transparent"
             >
               <Smile className="w-4 h-4" />
             </Button>
           </div>
-          
-          <Button 
+
+          <Button
             onClick={handleSendMessage}
             disabled={!message.trim()}
             size="icon"
