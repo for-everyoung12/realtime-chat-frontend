@@ -11,6 +11,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { LoginPage } from "../modules/auth";
 import { ChatLayout } from "../modules/chat";
 import NotFound from "./pages/NotFound";
+import { UserProfile } from "../modules/profile";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +40,14 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route
+                path="/profile/:id"
+                element={
+                  <ProtectedRoute>
+                    <UserProfile />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
