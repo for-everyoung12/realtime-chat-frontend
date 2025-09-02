@@ -14,9 +14,17 @@ import { AuthService } from "../services/auth.service";
 export function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    //login
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
+
+    //register 
+    // register
+    const [name, setName] = useState("");
+    const [regEmail, setRegEmail] = useState("");
+    const [regPassword, setRegPassword] = useState("");
 
     const navigate = useNavigate();
     const { setUser } = useAuth();
@@ -31,12 +39,33 @@ export function LoginPage() {
             await AuthService.login({ email, password });   // server set cookie
             const me = await AuthService.me();              // hydrate từ cookie
             setUser(me);
-            
+
             navigate("/", { replace: true });
         } catch (err: any) {
             const msg = err?.response?.data?.message || "Login failed";
             setError(msg);
             console.error("Login failed", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isLoading) return;
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            await AuthService.register({ name, email: regEmail, password: regPassword });
+            await AuthService.login({ email: regEmail, password: regPassword });
+            const me = await AuthService.me();
+            setUser(me);
+            navigate("/", { replace: true });
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || "Register failed";
+            setError(msg);
+            console.error("Register failed", err);
         } finally {
             setIsLoading(false);
         }
@@ -129,15 +158,17 @@ export function LoginPage() {
                             </TabsContent>
 
                             <TabsContent value="register">
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                                <form onSubmit={handleRegister} className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="username">Username</Label>
+                                        <Label htmlFor="name">Name</Label>
                                         <div className="relative">
                                             <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                             <Input
-                                                id="username"
+                                                id="name"
                                                 type="text"
-                                                placeholder="Choose a username"
+                                                value={name}
+                                                onChange={(e) => setName(e.target.value)}
+                                                placeholder="Choose a name"
                                                 className="pl-10"
                                                 required
                                             />
@@ -151,6 +182,8 @@ export function LoginPage() {
                                             <Input
                                                 id="reg-email"
                                                 type="email"
+                                                value={regEmail}
+                                                onChange={(e) => setRegEmail(e.target.value)}
                                                 placeholder="Enter your email"
                                                 className="pl-10"
                                                 required
@@ -165,6 +198,8 @@ export function LoginPage() {
                                             <Input
                                                 id="reg-password"
                                                 type={showPassword ? "text" : "password"}
+                                                value={regPassword}
+                                                onChange={(e) => setRegPassword(e.target.value)}
                                                 placeholder="Create a password"
                                                 className="pl-10 pr-10"
                                                 required
