@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserPlus, Check, X, Search } from "lucide-react";
 import { Button } from "@/modules/shared/components/button";
 import { Input } from "@/modules/shared/components/input";
@@ -7,66 +7,153 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/modules/shared/components
 import { getInitialLetter } from "@/modules/shared/lib/utils";
 import { Badge } from "@/modules/shared/components/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/modules/shared/components/tabs";
+import { FriendService } from "@/modules/friends/services/friend.service";
+import { useNavigate } from "react-router-dom";
 
-interface FriendRequest {
-  id: string;
+interface FriendRequestItem {
+  id: string; // requester user id
+  friendshipId?: string; // friendship doc id
   name: string;
-  username: string;
+  username?: string;
+  email?: string;
   avatar?: string;
-  mutualFriends: number;
-  requestDate: Date;
+  requestedAt?: string | Date;
 }
 
 interface FriendRequestsProps {
   onClose: () => void;
 }
 
-const mockIncomingRequests: FriendRequest[] = [
-  {
-    id: "1",
-    name: "Sarah Wilson",
-    username: "@sarahw",
-    mutualFriends: 3,
-    requestDate: new Date(Date.now() - 1000 * 60 * 30)
-  },
-  {
-    id: "2", 
-    name: "Mike Johnson",
-    username: "@mikej",
-    mutualFriends: 1,
-    requestDate: new Date(Date.now() - 1000 * 60 * 60 * 2)
-  }
-];
-
-const mockSentRequests: FriendRequest[] = [
-  {
-    id: "3",
-    name: "Emily Davis",
-    username: "@emilyd",
-    mutualFriends: 2,
-    requestDate: new Date(Date.now() - 1000 * 60 * 60 * 24)
-  }
-];
+const mockSentRequests: FriendRequestItem[] = [];
 
 export function FriendRequests({ onClose }: FriendRequestsProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [newFriendUsername, setNewFriendUsername] = useState("");
+  const [incoming, setIncoming] = useState<FriendRequestItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<FriendRequestItem[]>([]);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
 
-  const handleAcceptRequest = (requestId: string) => {
-    console.log("Accepting friend request:", requestId);
-    // Handle accept logic
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const res = await FriendService.getPendingFriendRequests({ limit: 20 });
+        // Accept both { items: [...] } and { rows: [...] }
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.rows)
+          ? res.rows
+          : [];
+        const mapped: FriendRequestItem[] = items.map((it: any) => {
+          const requester = it.requesterId ?? it.requester ?? {};
+          return {
+            id: requester._id ?? requester.id ?? it.requesterId ?? it.friendId ?? it.userId,
+            friendshipId: it._id ?? it.id,
+            name: requester.name ?? requester.username ?? requester.email ?? "Unknown",
+            username: requester.username,
+            email: requester.email,
+            avatar: requester.avatar,
+            requestedAt: it.createdAt ?? it.requestedAt,
+          } as FriendRequestItem;
+        });
+        setIncoming(mapped);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  // Load accepted friends once to filter search results
+  useEffect(() => {
+    const loadFriends = async () => {
+      try {
+        const data = await FriendService.getAcceptedFriends({ limit: 500 });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const ids = new Set<string>(
+          items.map((it: any) => (it.friendId ?? it.id ?? it._id ?? it.userId)).filter(Boolean)
+        );
+        setFriendIds(ids);
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadFriends();
+  }, []);
+
+  // Debounced search for users by text input
+  useEffect(() => {
+    if (!newFriendUsername.trim()) {
+      setResults([]);
+      return;
+    }
+    const handler = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const res = await FriendService.searchUsers(newFriendUsername, { limit: 5 });
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.rows)
+          ? res.rows
+          : Array.isArray(res)
+          ? res
+          : [];
+        const mapped: FriendRequestItem[] = items.map((u: any) => ({
+          id: u.id ?? u._id ?? u.userId,
+          name: u.name ?? u.username ?? u.email ?? "Unknown",
+          username: u.username ?? u.email,
+          avatar: u.avatar,
+        }));
+        const filtered = mapped.filter(r => !!r.id && !friendIds.has(r.id));
+        setResults(filtered);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [newFriendUsername, friendIds]);
+
+  const handleAcceptRequest = async (requesterUserId: string) => {
+    await FriendService.acceptFriendRequest(requesterUserId);
+    setIncoming((prev) => prev.filter((r) => r.id !== requesterUserId));
   };
 
-  const handleDeclineRequest = (requestId: string) => {
-    console.log("Declining friend request:", requestId);
-    // Handle decline logic
+  const handleDeclineRequest = async (requesterUserId: string) => {
+    await FriendService.rejectFriendRequest(requesterUserId);
+    setIncoming((prev) => prev.filter((r) => r.id !== requesterUserId));
   };
 
-  const handleSendRequest = () => {
+  const handleSendRequest = async () => {
     if (!newFriendUsername.trim()) return;
-    console.log("Sending friend request to:", newFriendUsername);
-    setNewFriendUsername("");
-    // Handle send request logic
+    try {
+      setSending(true);
+      // Prefer first current result
+      const first = results[0];
+      // Fallback to direct search 1 item if results empty
+      let userId = first?.id;
+      if (!userId) {
+        const result = await FriendService.searchUsers(newFriendUsername, { limit: 1 });
+        const firstRaw = Array.isArray(result?.items)
+          ? result.items[0]
+          : Array.isArray(result?.rows)
+          ? result.rows[0]
+          : Array.isArray(result)
+          ? result[0]
+          : null;
+        userId = firstRaw?.id ?? firstRaw?._id ?? firstRaw?.userId;
+      }
+      if (userId) {
+        await FriendService.sendFriendRequest(userId);
+      }
+    } finally {
+      setSending(false);
+      setNewFriendUsername("");
+      setResults([]);
+    }
   };
 
   const formatTimeAgo = (date: Date) => {
@@ -112,13 +199,48 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendRequest()}
                   className="bg-chat-input border-0 focus-visible:ring-1 focus-visible:ring-primary"
                 />
+                {newFriendUsername && (
+                  <div className="mt-2 bg-popover border border-card-border rounded-md shadow-sm max-h-60 overflow-auto">
+                    {searching ? (
+                      <div className="p-3 text-sm text-muted-foreground">Searching...</div>
+                    ) : results.length > 0 ? (
+                      results.map((u) => (
+                        <div
+                          key={u.id}
+                          className="w-full p-3 hover:bg-accent/50 flex items-center gap-3"
+                        >
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={u.avatar} />
+                            <AvatarFallback className="bg-primary text-primary-foreground font-bold">
+                              {u.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-foreground truncate cursor-pointer" onClick={() => navigate(`/profile/${u.id}`)}>{u.name}</div>
+                            {u.username && (
+                              <div className="text-xs text-muted-foreground truncate">{u.username}</div>
+                            )}
+                          </div>
+                          {!friendIds.has(u.id) && (
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${u.id}`)}>View</Button>
+                              <Button size="sm" onClick={() => FriendService.sendFriendRequest(u.id as string)}>Add</Button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-sm text-muted-foreground">No results</div>
+                    )}
+                  </div>
+                )}
               </div>
               <Button 
                 onClick={handleSendRequest}
-                disabled={!newFriendUsername.trim()}
+                disabled={!newFriendUsername.trim() || sending}
                 className="bg-gradient-primary hover:shadow-glow"
               >
-                Send Request
+                {sending ? 'Sending...' : 'Send Request'}
               </Button>
             </div>
           </div>
@@ -128,9 +250,9 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
             <TabsList className="grid w-full grid-cols-2 bg-card">
               <TabsTrigger value="incoming" className="relative">
                 Incoming
-                {mockIncomingRequests.length > 0 && (
+                {incoming.length > 0 && (
                   <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 px-2 text-xs">
-                    {mockIncomingRequests.length}
+                    {incoming.length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -141,8 +263,10 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
 
             {/* Incoming Requests */}
             <TabsContent value="incoming" className="space-y-4">
-              {mockIncomingRequests.length > 0 ? (
-                mockIncomingRequests.map((request) => (
+              {loading ? (
+                <div className="text-center py-12 text-muted-foreground">Loading...</div>
+              ) : incoming.length > 0 ? (
+                incoming.map((request) => (
                   <div
                     key={request.id}
                     className="flex items-center gap-4 p-4 rounded-lg bg-card/50 border border-card-border"
@@ -157,11 +281,14 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-foreground">{request.name}</h4>
-                        <span className="text-sm text-muted-foreground">{request.username}</span>
+                        {request.username && (
+                          <span className="text-sm text-muted-foreground">{request.username}</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{request.mutualFriends} mutual friends</span>
-                        <span>{formatTimeAgo(request.requestDate)}</span>
+                        {request.requestedAt && (
+                          <span>{formatTimeAgo(new Date(request.requestedAt))}</span>
+                        )}
                       </div>
                     </div>
                     
@@ -213,8 +340,9 @@ export function FriendRequests({ onClose }: FriendRequestsProps) {
                         <span className="text-sm text-muted-foreground">{request.username}</span>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{request.mutualFriends} mutual friends</span>
-                        <span>Sent {formatTimeAgo(request.requestDate)}</span>
+                        {request.requestedAt && (
+                          <span>Sent {formatTimeAgo(new Date(request.requestedAt))}</span>
+                        )}
                       </div>
                     </div>
                     

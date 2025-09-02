@@ -8,13 +8,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/modules/shared/components
 import { Switch } from "@/modules/shared/components/switch";
 import { Separator } from "@/modules/shared/components/separator";
 import { ProfileService } from "../services/profile.service";
+import { AuthService } from "@/modules/auth/services/auth.service";
+import { useAuth } from "@/app/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 
 interface UserSettingsProps {
   onClose: () => void;
-}
+} 
 
 export function UserSettings({ onClose }: UserSettingsProps) {
+  const { setUser } = useAuth();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
     name: "",
@@ -50,6 +55,17 @@ export function UserSettings({ onClose }: UserSettingsProps) {
 
   const handleSaveProfile = () => {
     setIsEditing(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AuthService.logout();
+    } catch (err) {
+      // ignore, still clear local state
+    } finally {
+      setUser(null);
+      navigate("/login");
+    }
   };
 
   return (
@@ -228,6 +244,9 @@ export function UserSettings({ onClose }: UserSettingsProps) {
               </Button>
               <Button variant="destructive" className="w-full justify-start">
                 Delete Account
+              </Button>
+              <Button variant="outline" className="w-full justify-start" onClick={handleLogout}>
+                Logout
               </Button>
             </div>
           </div>

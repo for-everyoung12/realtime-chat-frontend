@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Users, MessageCircle, Search, Plus, Settings, UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/modules/shared/components/button";
 import { Input } from "@/modules/shared/components/input";
@@ -7,6 +7,7 @@ import { Badge } from "@/modules/shared/components/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/modules/shared/components/tabs";
 import { PresenceDot } from "@/modules/shared/components/presence-dot";
 import type { UiFriend, UiChatRoom } from "@/modules/chat/types/ui";
+// Only local search across existing friends
 
 type Friend = UiFriend;
 type ChatRoom = UiChatRoom;
@@ -39,6 +40,11 @@ export function ChatSidebar({
   onLoadMore,
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const friendResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [] as Friend[];
+    return friends.filter((f) => f.name.toLowerCase().includes(q));
+  }, [searchQuery, friends]);
 
   const filteredFriends = friends.filter((friend) =>
     friend.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -85,6 +91,29 @@ export function ChatSidebar({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
+          {searchQuery && (
+            <div className="absolute left-0 right-0 mt-2 bg-popover border border-border rounded-md shadow-lg z-10 max-h-60 overflow-auto">
+              {friendResults.length > 0 ? (
+                friendResults.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => onFriendSelect(u.id)}
+                    className="w-full p-3 text-left hover:bg-accent/50 flex items-center gap-3"
+                  >
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage src={u.avatar} />
+                      <AvatarFallback className="bg-primary text-primary-foreground font-bold">
+                        {u.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm text-foreground">{u.name}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="p-3 text-sm text-muted-foreground">No results</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
